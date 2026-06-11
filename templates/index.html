@@ -443,8 +443,9 @@
     }
   }
 
-  // Pegar con Ctrl+V en cualquier parte
+  // Pegar con Ctrl+V en cualquier parte (solo si el foco NO está ya en el input)
   document.addEventListener('paste', e => {
+    if (document.activeElement === document.getElementById('url')) return;
     const txt = e.clipboardData.getData('text');
     if (txt.includes('youtube.com') || txt.includes('youtu.be')) {
       document.getElementById('url').value = txt;
