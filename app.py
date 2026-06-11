@@ -1,8 +1,3 @@
-"""
-Descargador YouTube - Para hosting Ionos (PHP/Python)
-Requiere Python 3.10+ y yt-dlp instalado en el servidor
-"""
-
 import os, re, uuid, threading, time
 from pathlib import Path
 from flask import Flask, render_template, request, jsonify, send_from_directory
@@ -17,7 +12,8 @@ app = Flask(__name__)
 DOWNLOAD_DIR = Path(__file__).parent / "downloads"
 DOWNLOAD_DIR.mkdir(exist_ok=True)
 
-# Borrar archivos de más de 1 hora automáticamente
+COOKIES_FILE = Path(__file__).parent / "cookies.txt"
+
 def limpiar_viejos():
     while True:
         time.sleep(600)
@@ -29,7 +25,6 @@ def limpiar_viejos():
 
 threading.Thread(target=limpiar_viejos, daemon=True).start()
 
-# Estado en memoria: { job_id: {...} }
 jobs = {}
 lock = threading.Lock()
 
@@ -56,7 +51,6 @@ def hacer_descarga(job_id, url, modo):
         "noplaylist": True,
         "quiet": True,
         "no_warnings": True,
-        # Simular navegador para evitar bloqueos de bot
         "http_headers": {
             "User-Agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -68,6 +62,10 @@ def hacer_descarga(job_id, url, modo):
         "socket_timeout": 30,
     }
 
+    # Usar cookies si existe el archivo
+    if COOKIES_FILE.exists():
+        opts["cookiefile"] = str(COOKIES_FILE)
+
     if modo == "mp3":
         opts["format"] = "bestaudio/best"
         opts["postprocessors"] = [{
@@ -76,12 +74,12 @@ def hacer_descarga(job_id, url, modo):
             "preferredquality": "192",
         }]
     elif modo == "720":
-        opts["format"] = "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best[height<=720]"
+        opts["format"] = "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720]"
         opts["merge_output_format"] = "mp4"
     elif modo == "1080":
-        opts["format"] = "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best[height<=1080]"
+        opts["format"] = "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080]"
         opts["merge_output_format"] = "mp4"
-    else:  # best
+    else:
         opts["format"] = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
         opts["merge_output_format"] = "mp4"
 
@@ -120,7 +118,7 @@ def start():
     url  = (data.get("url") or "").strip()
     modo = data.get("modo", "best")
 
-    if not url or "youtube.com" not in url and "youtu.be" not in url:
+    if not url or ("youtube.com" not in url and "youtu.be" not in url):
         return jsonify({"ok": False, "error": "URL de YouTube no válida"}), 400
 
     jid = uuid.uuid4().hex
@@ -142,7 +140,7 @@ def estado(jid):
 
 @app.route("/api/archivo/<nombre>")
 def archivo(nombre):
-    nombre = Path(nombre).name  # seguridad
+    nombre = Path(nombre).name
     return send_from_directory(DOWNLOAD_DIR, nombre, as_attachment=True)
 
 
